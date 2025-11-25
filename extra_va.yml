@@ -1,0 +1,46 @@
+gcp_project: "cloud-network-prod-12345"
+
+subnets:
+  - RegionCode: "AO"
+    Env: "pr"
+    Solution: "openshift"
+    SubnetSize: 27
+    VPC: "testvpc"
+    Comments: "AO-PR-APP"
+
+  - RegionCode: "AO"
+    Env: "np"
+    Solution: "sap"
+    SubnetSize: 28
+    VPC: "testvpc"
+    Comments: "AO-NP-SAP"
+
+  - RegionCode: "EU"
+    Env: "pr"
+    Solution: "win"
+    SubnetSize: 29
+    VPC: "testvpc"
+    Comments: "EU-PR-WIN"
+
+  - RegionCode: "EU"
+    Env: "np"
+    Solution: "app"
+    SubnetSize: 27
+    VPC: "testvpc"
+    Comments: "EU-NP-APP"
+
+  - RegionCode: "AS"
+    Env: "pr"
+    Solution: "linux"
+    SubnetSize: 24
+    VPC: "testvpc"
+    Comments: "AS-PR-LINUX"
+
+
+email_user: "premgkuamrdc@gmail.com"
+email_password: "jvpx gfpd yyta jkwe"
+email_to: "premgkumar2012@gmail.com"
+
+create_secondary: false
+secondary_ip_range_list:[]
+  
