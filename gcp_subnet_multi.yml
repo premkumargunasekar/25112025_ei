@@ -1,0 +1,103 @@
+---
+- name: Multi-Subnet IPAM + GCP Provisioning
+  hosts: 192.168.116.129
+  gather_facts: no
+  connection: ssh
+
+  vars:
+    env_csv: "/opt/GCP/Env.csv"
+    subnet_csv: "/opt/GCP/Subnet.csv"
+    calc_script: "/opt/GCP/scripts/calc_next_subnet.py"
+    gcp_sa_file: "/opt/GCP/sa.json"
+
+    # Email config (configure in AWX extra vars or vars file)
+    email_user: "{{ email_user }}"
+    email_password: "{{ email_password }}"
+    email_to: "{{ email_to }}"
+
+    region_map:
+      AO: asia-south1
+      EU: europe-west1
+      AS: asia-east1
+      NA: us-central1
+
+  tasks:
+
+    # ---------------------------------------
+    # VALIDATION CHECKS
+    # ---------------------------------------
+    - fail:
+        msg: "'subnets' variable missing"
+      when: subnets is not defined
+
+    - fail:
+        msg: "'subnets' should be a list"
+      when: subnets is not iterable
+
+    - fail:
+        msg: "Max 5 subnets per execution"
+      when: subnets | length > 5
+
+
+    # ---------------------------------------
+    # READ CSV FILES
+    # ---------------------------------------
+    - name: Read Env.csv
+      read_csv:
+        path: "{{ env_csv }}"
+      register: env_raw
+
+    - set_fact:
+        env_data: "{{ env_raw.list }}"
+
+    - name: Read Subnet.csv
+      read_csv:
+        path: "{{ subnet_csv }}"
+      register: subnet_raw
+
+    - set_fact:
+        subnet_data: "{{ subnet_raw.list }}"
+
+
+    # ---------------------------------------
+    # INIT EMAIL REPORT STORE
+    # ---------------------------------------
+    - name: Initialize subnet report collector
+      set_fact:
+        subnet_report: []
+
+
+    # ---------------------------------------
+    # PROCESS EACH SUBNET
+    # ---------------------------------------
+    - name: Process each subnet request
+      include_tasks: subnet_unit.yml
+      loop: "{{ subnets }}"
+      loop_control:
+        loop_var: req
+
+
+    # ---------------------------------------
+    # RENDER FINAL EMAIL REPORT
+    # ---------------------------------------
+    - name: Render HTML email report
+      template:
+        src: "subnet_report.html.j2"
+        dest: "/tmp/subnet_report.html"
+      when: subnet_report | length > 0
+
+
+    # ---------------------------------------
+    # SEND EMAIL REPORT
+    # ---------------------------------------
+    - name: Send HTML email with report
+      community.general.mail:
+        host: smtp.gmail.com
+        port: 587
+        username: "{{ email_user }}"
+        password: "{{ email_password }}"
+        to: "{{ email_to }}"
+        subject: "GCP Multi-Subnet Creation Report"
+        subtype: html
+        body: "{{ lookup('file','/tmp/subnet_report.html') }}"
+      when: subnet_report | length > 0
