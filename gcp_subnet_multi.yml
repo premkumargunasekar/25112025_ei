@@ -82,10 +82,10 @@
     # ---------------------------------------
     - name: Render HTML email report
       template:
-        src: "subnet_report.html.j2"
+        src: "templates/subnet_report.html.j2"
         dest: "/tmp/subnet_report.html"
-      when: subnet_report | length > 0
-
+      delegate_to: localhost
+      run_once: true
 
     # ---------------------------------------
     # SEND EMAIL REPORT
@@ -100,4 +100,6 @@
         subject: "GCP Multi-Subnet Creation Report"
         subtype: html
         body: "{{ lookup('file','/tmp/subnet_report.html') }}"
-      when: subnet_report | length > 0
+      delegate_to: localhost
+      run_once: true
+
