@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      line-height: 1.5;
+    }
+
+    h2 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .status {
+      font-weight: bold;
+      margin: 5px 0 15px 0;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-bottom: 25px;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f2f2f2;
+      font-weight: bold;
+    }
+
+    .section-title {
+      margin-top: 25px;
+      font-size: 18px;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+
+<h2>GCP Subnet Creation Report</h2>
+<p>Hello Team,</p>
+
+<p>The subnet creation workflow has completed. Below are the results for each subnet request:</p>
+
+{% for entry in subnet_report %}
+
+  <h3 class="section-title">Subnet {{ loop.index }} Report</h3>
+
+  <p class="status" style="color: {{ entry.status_color }};">
+    {{ entry.status_msg }}
+  </p>
+
+  <table>
+    <tr>
+      <th>Project ID</th>
+      <td>{{ entry.project_id }}</td>
+    </tr>
+
+    <tr>
+      <th>Region</th>
+      <td>{{ entry.region }}</td>
+    </tr>
+
+    <tr>
+      <th>VPC Name</th>
+      <td>{{ entry.vpc }}</td>
+    </tr>
+
+    <tr>
+      <th>Subnet Name</th>
+      <td>{{ entry.subnet_name }}</td>
+    </tr>
+
+    <tr>
+      <th>IP CIDR Range</th>
+      <td>{{ entry.cidr }}</td>
+    </tr>
+
+    <tr>
+      <th>Secondary Ranges</th>
+      <td>
+        {% if entry.create_secondary and entry.secondary_ranges %}
+          <ul>
+            {% for sec in entry.secondary_ranges %}
+              <li><strong>{{ sec.range_name }}</strong> : {{ sec.ip }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          None
+        {% endif %}
+      </td>
+    </tr>
+
+    <tr>
+      <th>Requested Input</th>
+      <td>
+        RegionCode: {{ entry.requested.RegionCode }} <br>
+        Env: {{ entry.requested.Env }} <br>
+        Solution: {{ entry.requested.Solution }} <br>
+        VPC: {{ entry.requested.VPC }} <br>
+        Comments: {{ entry.requested.Comments }} <br>
+      </td>
+    </tr>
+
+  </table>
+
+{% endfor %}
+
+<p style="margin-top: 30px;">
+Best regards,<br>
+<b>Network Automation Team</b><br>
+<small>This is an automated email. Please do not reply.</small>
+</p>
+
+</body>
+</html>
