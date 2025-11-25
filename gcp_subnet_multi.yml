@@ -91,7 +91,7 @@
     # SEND EMAIL REPORT
     # ---------------------------------------
     - name: Send HTML email with report
-      community.general.mail:
+      mail:
         host: smtp.gmail.com
         port: 587
         username: "{{ email_user }}"
