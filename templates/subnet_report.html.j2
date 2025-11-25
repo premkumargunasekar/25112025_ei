@@ -2,120 +2,62 @@
 <html>
 <head>
   <style>
-    body { 
-      font-family: Arial, sans-serif; 
-      line-height: 1.5;
-    }
-
-    h2 {
-      color: #333;
-      margin-bottom: 10px;
-    }
-
-    .status {
-      font-weight: bold;
-      margin: 5px 0 15px 0;
-    }
-
+    body { font-family: Arial, sans-serif; }
     table {
-      border-collapse: collapse;
       width: 100%;
-      margin-bottom: 25px;
+      border-collapse: collapse;
     }
-
     th, td {
-      border: 1px solid #ddd;
-      padding: 10px;
-      text-align: left;
+      border: 1px solid #ccc;
+      padding: 8px;
     }
-
     th {
-      background-color: #f2f2f2;
-      font-weight: bold;
+      background: #f4f4f4;
     }
-
-    .section-title {
-      margin-top: 25px;
-      font-size: 18px;
-      color: #444;
-    }
+    .success { color: green; font-weight: bold; }
+    .failed { color: red; font-weight: bold; }
   </style>
 </head>
 <body>
 
 <h2>GCP Subnet Creation Report</h2>
+
 <p>Hello Team,</p>
+<p>The subnet creation workflow has completed. Below are the results of this run:</p>
 
-<p>The subnet creation workflow has completed. Below are the results for each subnet request:</p>
-
-{% for entry in subnet_report %}
-
-  <h3 class="section-title">Subnet {{ loop.index }} Report</h3>
-
-  <p class="status" style="color: {{ entry.status_color }};">
-    {{ entry.status_msg }}
-  </p>
-
-  <table>
+<table>
+  <thead>
     <tr>
-      <th>Project ID</th>
-      <td>{{ entry.project_id }}</td>
-    </tr>
-
-    <tr>
+      <th>Project</th>
       <th>Region</th>
-      <td>{{ entry.region }}</td>
-    </tr>
-
-    <tr>
-      <th>VPC Name</th>
-      <td>{{ entry.vpc }}</td>
-    </tr>
-
-    <tr>
+      <th>VPC</th>
       <th>Subnet Name</th>
-      <td>{{ entry.subnet_name }}</td>
+      <th>CIDR</th>
+      <th>Status</th>
+      <th>Message</th>
     </tr>
+  </thead>
+  <tbody>
+    {% for item in subnet_report %}
+      <tr>
+        <td>{{ item.project }}</td>
+        <td>{{ item.region }}</td>
+        <td>{{ item.vpc }}</td>
+        <td>{{ item.subnet_name }}</td>
+        <td>{{ item.cidr }}</td>
+        <td class="{{ 'success' if item.status == 'SUCCESS' else 'failed' }}">
+          {{ item.status }}
+        </td>
+        <td>{{ item.message }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
 
-    <tr>
-      <th>IP CIDR Range</th>
-      <td>{{ entry.cidr }}</td>
-    </tr>
-
-    <tr>
-      <th>Secondary Ranges</th>
-      <td>
-        {% if entry.create_secondary and entry.secondary_ranges %}
-          <ul>
-            {% for sec in entry.secondary_ranges %}
-              <li><strong>{{ sec.range_name }}</strong> : {{ sec.ip }}</li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          None
-        {% endif %}
-      </td>
-    </tr>
-
-    <tr>
-      <th>Requested Input</th>
-      <td>
-        RegionCode: {{ entry.requested.RegionCode }} <br>
-        Env: {{ entry.requested.Env }} <br>
-        Solution: {{ entry.requested.Solution }} <br>
-        VPC: {{ entry.requested.VPC }} <br>
-        Comments: {{ entry.requested.Comments }} <br>
-      </td>
-    </tr>
-
-  </table>
-
-{% endfor %}
-
-<p style="margin-top: 30px;">
+<p style="margin-top:20px;">
 Best regards,<br>
 <b>Network Automation Team</b><br>
-<small>This is an automated email. Please do not reply.</small>
+<small>This is an automated email. Do not reply.</small>
 </p>
 
 </body>
