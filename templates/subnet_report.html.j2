@@ -29,6 +29,7 @@
   <thead>
     <tr>
       <th>Project</th>
+      <th>Region Code</th>
       <th>Region</th>
       <th>VPC</th>
       <th>Subnet Name</th>
@@ -41,6 +42,7 @@
     {% for item in subnet_report %}
       <tr>
         <td>{{ item.project }}</td>
+        <td>{{ item.region_code }}</td>
         <td>{{ item.region }}</td>
         <td>{{ item.vpc }}</td>
         <td>{{ item.subnet_name }}</td>
