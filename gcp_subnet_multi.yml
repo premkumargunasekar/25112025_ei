@@ -75,6 +75,7 @@
       loop: "{{ subnets }}"
       loop_control:
         loop_var: req
+        index_var: batch_index
 
 
     # ---------------------------------------
