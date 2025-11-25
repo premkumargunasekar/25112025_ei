@@ -1,9 +1,8 @@
 ---
-# subnet_unit.yml
-# Processes one subnet request from the "subnets" list
+# subnet_unit.yml – Processes ONE subnet request
 
 # ----------------------------------------------------------
-# 1. Select block from Env.csv (RegionCode + Env)
+# 1. Select block from Env.csv
 # ----------------------------------------------------------
 - name: Select matching block from Env.csv
   set_fact:
@@ -20,7 +19,7 @@
 
 
 # ----------------------------------------------------------
-# 2. Run CIDR calculator (GCP-aware Python script)
+# 2. Run CIDR calculator (Python script)
 # ----------------------------------------------------------
 - name: Calculate next available CIDR (GCP-aware)
   command:
@@ -45,7 +44,7 @@
 
 
 # ----------------------------------------------------------
-# 3. Count existing subnets BEFORE batch
+# 3. Dynamic naming based on COUNT per (Region, Env)
 # ----------------------------------------------------------
 - name: Count existing subnets for Region + Env
   set_fact:
@@ -58,19 +57,13 @@
         | length
       }}
 
-# ----------------------------------------------------------
-# 4. Compute next_number with batch index support
-#     next = existing_count + batch_index + 1
-#     Example: existing_count=4, batch:0→005,1→006,...
-# ----------------------------------------------------------
-- name: Determine next_number for batch execution
+- name: Determine next number from count
   set_fact:
-    next_number: "{{ '%03d' % ( (existing_count | int) + (batch_index | int) + 1 ) }}"
+    next_number: "{{ '%03d' % ((existing_count | int) + 1) }}"
 
 
 # ----------------------------------------------------------
-# 5. Build final subnet name
-# Example: ao-pr-openshift-005-snt
+# 4. Build final SubnetName
 # ----------------------------------------------------------
 - name: Build final SubnetName
   set_fact:
@@ -78,7 +71,7 @@
 
 
 # ----------------------------------------------------------
-# 6. Update Subnet.csv locally
+# 5. Update Subnet.csv (append)
 # ----------------------------------------------------------
 - name: Update Subnet.csv
   lineinfile:
@@ -89,7 +82,7 @@
 
 
 # ----------------------------------------------------------
-# 7. Create subnet in GCP
+# 6. Create subnet in GCP
 # ----------------------------------------------------------
 - name: Create subnet in GCP
   google.cloud.gcp_compute_subnetwork:
@@ -106,22 +99,18 @@
 
 
 # ----------------------------------------------------------
-# 8. Conflict handler
+# 7. Append data to global report
 # ----------------------------------------------------------
-- name: Skip on conflict
-  debug:
-    msg: " GCP conflict → CIDR {{ new_cidr }} or name {{ SubnetName }} already exists. Skipped."
-  when: gcp_result.failed
-
-
-# ----------------------------------------------------------
-# 9. Success message
-# ----------------------------------------------------------
-- name: Success result
-  debug:
-    msg: " Created {{ new_cidr }} → {{ SubnetName }}"
-
-# Cleanup
-- set_fact:
-    new_cidr: null
-    selected_block: null
+- name: Append result to subnet_report
+  set_fact:
+    subnet_report: "{{ subnet_report + [ {
+        'region': region_map[req.RegionCode],
+        'project': gcp_project,
+        'vpc': req.VPC,
+        'subnet_name': SubnetName,
+        'cidr': new_cidr,
+        'status': ( 'FAILED' if gcp_result.failed else 'SUCCESS' ),
+        'message': gcp_result.msg | default('Created successfully')
+    } ] }}"
+  delegate_to: localhost
+  run_once: true
