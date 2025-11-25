@@ -10,11 +10,6 @@
     calc_script: "/opt/GCP/scripts/calc_next_subnet.py"
     gcp_sa_file: "/opt/GCP/sa.json"
 
-    # Email config (configure in AWX extra vars or vars file)
-    email_user: "{{ email_user }}"
-    email_password: "{{ email_password }}"
-    email_to: "{{ email_to }}"
-
     region_map:
       AO: asia-south1
       EU: europe-west1
@@ -23,9 +18,9 @@
 
   tasks:
 
-    # ---------------------------------------
-    # VALIDATION CHECKS
-    # ---------------------------------------
+    # ----------------------------------------------------------
+    # 0. Validate inputs
+    # ----------------------------------------------------------
     - fail:
         msg: "'subnets' variable missing"
       when: subnets is not defined
@@ -39,9 +34,17 @@
       when: subnets | length > 5
 
 
-    # ---------------------------------------
-    # READ CSV FILES
-    # ---------------------------------------
+    # ----------------------------------------------------------
+    # 1. Init report list
+    # ----------------------------------------------------------
+    - name: Initialize subnet report list
+      set_fact:
+        subnet_report: []
+
+
+    # ----------------------------------------------------------
+    # 2. Load CSV data
+    # ----------------------------------------------------------
     - name: Read Env.csv
       read_csv:
         path: "{{ env_csv }}"
@@ -59,17 +62,9 @@
         subnet_data: "{{ subnet_raw.list }}"
 
 
-    # ---------------------------------------
-    # INIT EMAIL REPORT STORE
-    # ---------------------------------------
-    - name: Initialize subnet report collector
-      set_fact:
-        subnet_report: []
-
-
-    # ---------------------------------------
-    # PROCESS EACH SUBNET
-    # ---------------------------------------
+    # ----------------------------------------------------------
+    # 3. Run subnet creation loop
+    # ----------------------------------------------------------
     - name: Process each subnet request
       include_tasks: subnet_unit.yml
       loop: "{{ subnets }}"
@@ -78,9 +73,9 @@
         index_var: batch_index
 
 
-    # ---------------------------------------
-    # RENDER FINAL EMAIL REPORT
-    # ---------------------------------------
+    # ----------------------------------------------------------
+    # 4. Generate HTML report
+    # ----------------------------------------------------------
     - name: Render HTML email report
       template:
         src: "templates/subnet_report.html.j2"
@@ -88,9 +83,10 @@
       delegate_to: localhost
       run_once: true
 
-    # ---------------------------------------
-    # SEND EMAIL REPORT
-    # ---------------------------------------
+
+    # ----------------------------------------------------------
+    # 5. Send Email
+    # ----------------------------------------------------------
     - name: Send HTML email with report
       mail:
         host: smtp.gmail.com
@@ -103,4 +99,3 @@
         body: "{{ lookup('file','/tmp/subnet_report.html') }}"
       delegate_to: localhost
       run_once: true
-
