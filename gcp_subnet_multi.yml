@@ -19,7 +19,7 @@
   tasks:
 
     # ----------------------------------------------------------
-    # 0. Validate inputs
+    # 0. Validation
     # ----------------------------------------------------------
     - fail:
         msg: "'subnets' variable missing"
@@ -35,15 +35,15 @@
 
 
     # ----------------------------------------------------------
-    # 1. Init report list
+    # 1. Initialize Report List
     # ----------------------------------------------------------
-    - name: Initialize subnet report list
+    - name: Init subnet_report
       set_fact:
         subnet_report: []
 
 
     # ----------------------------------------------------------
-    # 2. Load CSV data
+    # 2. Load CSV files
     # ----------------------------------------------------------
     - name: Read Env.csv
       read_csv:
@@ -63,7 +63,7 @@
 
 
     # ----------------------------------------------------------
-    # 3. Run subnet creation loop
+    # 3. Process each subnet
     # ----------------------------------------------------------
     - name: Process each subnet request
       include_tasks: subnet_unit.yml
@@ -87,7 +87,7 @@
     # ----------------------------------------------------------
     # 5. Send Email
     # ----------------------------------------------------------
-    - name: Send HTML email with report
+    - name: Send HTML email
       mail:
         host: smtp.gmail.com
         port: 587
