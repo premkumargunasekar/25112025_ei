@@ -1,0 +1,204 @@
+---
+# subnet_unit.yml
+# Processes one subnet request from the "subnets" list
+
+# ----------------------------------------------------------
+# 1. Select block from Env.csv (RegionCode + Env)
+# ----------------------------------------------------------
+- name: Select matching block from Env.csv
+  set_fact:
+    selected_block: "{{ item.Block }}"
+  loop: "{{ env_data }}"
+  loop_control:
+    loop_var: item
+  when: item.RegionCode == req.RegionCode and item.Env == req.Env
+
+- name: Fail if block missing
+  fail:
+    msg: "No block found in Env.csv for Region={{ req.RegionCode }} Env={{ req.Env }}"
+  when: selected_block is not defined
+
+
+# ----------------------------------------------------------
+# 2. Run CIDR calculator (GCP-aware script)
+# ----------------------------------------------------------
+- name: Calculate next available CIDR (GCP-aware)
+  command:
+    argv:
+      - python3
+      - "{{ calc_script }}"
+      - "{{ selected_block }}"
+      - "{{ req.SubnetSize }}"
+      - "{{ subnet_csv }}"
+      - "{{ gcp_project }}"
+      - "{{ region_map[req.RegionCode] }}"
+  register: calc
+  changed_when: false
+
+- name: Stop if no CIDR available
+  fail:
+    msg: "No available CIDR in block {{ selected_block }}"
+  when: calc.stdout == "NO_AVAILABLE_SUBNET"
+
+- set_fact:
+    new_cidr: "{{ calc.stdout }}"
+
+
+# ----------------------------------------------------------
+# 3. Extract existing names from Subnet CSV
+# ----------------------------------------------------------
+- name: Filter existing names from CSV
+  set_fact:
+    matched_names: >-
+      {{
+        subnet_data
+        | selectattr('RegionCode','equalto', req.RegionCode)
+        | selectattr('Env','equalto', req.Env)
+        | map(attribute='SubnetName')
+        | list
+      }}
+
+# ----------------------------------------------------------
+# 4. Extract numbers from existing names (safe)
+# ----------------------------------------------------------
+- name: Extract numbers from names (safe & robust)
+  set_fact:
+    number_list: >-
+      {{
+        matched_names
+        | map('regex_search', '.*-(\\d+)-snt$')
+        | map('default', 0)
+        | map('int')
+        | list
+      }}
+
+# ----------------------------------------------------------
+# 5. Compute next number safely
+# ----------------------------------------------------------
+- name: Determine last_number
+  set_fact:
+    last_number: "{{ (number_list | max | int) if number_list | length > 0 else 0 }}"
+
+- name: Determine next_number
+  set_fact:
+    next_number: "{{ '%03d' % (last_number | int + 1) }}"
+
+
+# ----------------------------------------------------------
+# 6. Build final subnet name
+# ----------------------------------------------------------
+- name: Build final SubnetName
+  set_fact:
+    SubnetName: "{{ req.RegionCode | lower }}-{{ req.Env | lower }}-{{ req.Solution | lower }}-{{ next_number }}-snt"
+
+
+# ----------------------------------------------------------
+# 7. Update Subnet.csv on your server
+# ----------------------------------------------------------
+- name: Update Subnet.csv
+  lineinfile:
+    path: "{{ subnet_csv }}"
+    insertafter: EOF
+    line: "{{ req.RegionCode }},{{ req.Env }},{{ new_cidr }},{{ SubnetName }},NetworkTeam,Created,{{ req.Comments }}"
+  when: new_cidr is defined
+
+
+# ----------------------------------------------------------
+# 8. Create subnet in GCP
+# ----------------------------------------------------------
+- name: Create subnet in GCP
+  google.cloud.gcp_compute_subnetwork:
+    name: "{{ SubnetName }}"
+    ip_cidr_range: "{{ new_cidr }}"
+    region: "{{ region_map[req.RegionCode] }}"
+    network:
+      selfLink: "https://www.googleapis.com/compute/v1/projects/{{ gcp_project }}/global/networks/{{ req.VPC }}"
+    project: "{{ gcp_project }}"
+    auth_kind: serviceaccount
+    service_account_file: "{{ gcp_sa_file }}"
+  register: gcp_result
+  ignore_errors: yes
+
+
+# ----------------------------------------------------------
+# 9. Handle conflict without stopping playbook
+# ----------------------------------------------------------
+- name: Skip on conflict
+  debug:
+    msg: "GCP conflict → CIDR {{ new_cidr }} or {{ SubnetName }} already exists. Skipped."
+  when: gcp_result.failed
+
+
+# ----------------------------------------------------------
+# 10. Success message
+# ----------------------------------------------------------
+- name: Success result
+  debug:
+    msg: "Created {{ new_cidr }} → {{ SubnetName }}"
+
+
+# ----------------------------------------------------------
+# 11. EMAIL STATUS FIELDS (NEW)
+# ----------------------------------------------------------
+- name: Determine CIDR conflict
+  set_fact:
+    cidr_exists: >-
+      {{
+        (gcp_result.msg is defined and
+        ('already exists' in (gcp_result.msg|string) or
+         'already in use' in (gcp_result.msg|string)))
+        | default(false)
+      }}
+
+- name: Build status message
+  set_fact:
+    status_msg: >-
+      {% if cidr_exists %}
+        CIDR {{ new_cidr }} already exists. Subnet '{{ SubnetName }}' was NOT created.
+      {% elif gcp_result.failed %}
+        Subnet creation failed for '{{ SubnetName }}'. Reason: {{ gcp_result.msg | default("Unknown error") }}
+      {% elif gcp_result.changed %}
+        Subnet '{{ SubnetName }}' created successfully.
+      {% else %}
+        Subnet '{{ SubnetName }}' creation result unknown.
+      {% endif %}
+
+- name: Set email color
+  set_fact:
+    status_color: >-
+      {% if cidr_exists %}
+        #FFA500
+      {% elif gcp_result.failed %}
+        #FF0000
+      {% elif gcp_result.changed %}
+        #008000
+      {% else %}
+        #000000
+      {% endif %}
+
+
+# ----------------------------------------------------------
+# 12. Append entry for final email report (NEW)
+# ----------------------------------------------------------
+- name: Add subnet entry report
+  set_fact:
+    subnet_report: "{{ subnet_report + [ {
+      'project_id': gcp_project,
+      'region': region_map[req.RegionCode],
+      'vpc': req.VPC,
+      'subnet_name': SubnetName,
+      'cidr': new_cidr,
+      'status_msg': status_msg,
+      'status_color': status_color,
+      'secondary_ranges': [],
+      'create_secondary': false,
+      'requested': req
+    } ] }}"
+
+
+# ----------------------------------------------------------
+# 13. Cleanup variables for next loop
+# ----------------------------------------------------------
+- set_fact:
+    new_cidr: null
+    selected_block: null
