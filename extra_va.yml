@@ -1,4 +1,4 @@
-gcp_project: "cloud-network-prod-12345"
+gcp_project: "network-automation-471112"
 
 subnets:
   - RegionCode: "AO"
