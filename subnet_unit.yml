@@ -104,6 +104,7 @@
 - name: Append result to subnet_report
   set_fact:
     subnet_report: "{{ subnet_report + [ {
+        'region_code': req.RegionCode,
         'region': region_map[req.RegionCode],
         'project': gcp_project,
         'vpc': req.VPC,
