@@ -4,12 +4,10 @@
   gather_facts: no
   connection: ssh
 
-  vars:
-    env_csv: "/opt/GCP/Env.csv"
-    subnet_csv: "/opt/GCP/Subnet.csv"
-    calc_script: "/opt/GCP/scripts/calc_next_subnet.py"
-    gcp_sa_file: "/opt/GCP/sa.json"
-
+  vars_files:
+    - vars/common.yml
+    - vars/paths.yml
+    
     region_map:
       AO: asia-south1
       EU: europe-west1
