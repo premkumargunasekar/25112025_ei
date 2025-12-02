@@ -1,0 +1,18 @@
+---
+# Common non-sensitive variables for GCP subnet automation
+
+# Maximum number of subnet requests allowed in one execution
+max_subnets_per_run: 5
+
+# Region map used to convert RegionCode -> GCP region
+region_map:
+  AO: asia-south1
+  EU: europe-west1
+  AS: asia-east1
+  NA: us-central1
+
+# HTML report output path
+report_output: "/tmp/subnet_report.html"
+
+# Email subject (non-sensitive part)
+email_subject: "GCP Multi-Subnet Creation Report"

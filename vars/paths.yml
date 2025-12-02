@@ -1,0 +1,12 @@
+---
+# All file paths needed for GCP IPAM automation
+
+# CSV input files
+env_csv: "/opt/GCP/Env.csv"
+subnet_csv: "/opt/GCP/Subnet.csv"
+
+# Python calculator script
+calc_script: "/opt/GCP/scripts/calc_next_subnet.py"
+
+# GCP Service Account JSON (only file path here, not the content)
+gcp_sa_file: "/opt/GCP/sa.json"
