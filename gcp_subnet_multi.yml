@@ -7,12 +7,12 @@
   vars_files:
     - vars/common.yml
     - vars/paths.yml
-    
-  region_map:
-    AO: asia-south1
-    EU: europe-west1
-    AS: asia-east1
-    NA: us-central1
+  vars:  
+    region_map:
+      AO: asia-south1
+      EU: europe-west1
+      AS: asia-east1
+      NA: us-central1
 
   tasks:
 
