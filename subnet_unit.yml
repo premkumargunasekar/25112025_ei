@@ -77,7 +77,7 @@
   lineinfile:
     path: "{{ subnet_csv }}"
     insertafter: EOF
-    line: "{{ req.RegionCode }},{{ req.Env }},{{ new_cidr }},{{ SubnetName }},NetworkTeam,Created,{{ req.Comments }}"
+    line: "{{ req.RegionCode }},{{ req.Env }},{{ new_cidr }},{{ SubnetName }},Created,{{ lookup('pipe','date +%Y-%m-%d_%H:%M:%S') }}"
   when: new_cidr is defined
 
 
