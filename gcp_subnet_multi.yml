@@ -7,7 +7,8 @@
   vars_files:
     - vars/common.yml
     - vars/paths.yml
-  vars:  
+
+  vars:
     region_map:
       AO: asia-south1
       EU: europe-west1
@@ -28,7 +29,7 @@
       when: subnets is not iterable
 
     - fail:
-        msg: "Max 5 subnets per execution"
+        msg: "Max 5 subnets per execution allowed"
       when: subnets | length > 5
 
 
@@ -38,6 +39,7 @@
     - name: Init subnet_report
       set_fact:
         subnet_report: []
+      delegate_to: localhost
 
 
     # ----------------------------------------------------------
@@ -55,13 +57,14 @@
       read_csv:
         path: "{{ subnet_csv }}"
       register: subnet_raw
+      ignore_errors: yes   # CSV may be empty first time
 
     - set_fact:
-        subnet_data: "{{ subnet_raw.list }}"
+        subnet_data: "{{ subnet_raw.list | default([]) }}"
 
 
     # ----------------------------------------------------------
-    # 3. Process each subnet
+    # 3. Process each subnet request
     # ----------------------------------------------------------
     - name: Process each subnet request
       include_tasks: subnet_unit.yml
@@ -75,8 +78,24 @@
         naming_solution: "{{ req.Solution | lower }}"
         naming_gcp_region: "{{ region_map[req.RegionCode] }}"
 
+
     # ----------------------------------------------------------
-    # 4. Generate HTML report
+    # 4. Determine overall job status
+    # ----------------------------------------------------------
+    - name: Determine overall status
+      set_fact:
+        overall_status: >-
+          {% if (subnet_report | selectattr('status','equalto','FAILED') | list) | length > 0 %}
+            FAILED
+          {% else %}
+            SUCCESS
+          {% endif %}
+      delegate_to: localhost
+      run_once: true
+
+
+    # ----------------------------------------------------------
+    # 5. Generate HTML report
     # ----------------------------------------------------------
     - name: Render HTML email report
       template:
@@ -87,7 +106,7 @@
 
 
     # ----------------------------------------------------------
-    # 5. Send Email
+    # 6. Send Email (Status-aware)
     # ----------------------------------------------------------
     - name: Send HTML email
       mail:
@@ -96,7 +115,7 @@
         username: "{{ email_user }}"
         password: "{{ email_password }}"
         to: "{{ email_to }}"
-        subject: "GCP Multi-Subnet Creation Report"
+        subject: "GCP Subnet Provisioning Report - {{ overall_status }}"
         subtype: html
         body: "{{ lookup('file','/tmp/subnet_report.html') }}"
       delegate_to: localhost
