@@ -17,35 +17,28 @@
 
   tasks:
 
-    # ----------------------------------------------------------
-    # 0. Validation
-    # ----------------------------------------------------------
+    # Fail early
     - fail:
-        msg: "'subnets' variable missing"
+        msg: "Variable 'subnets' missing"
       when: subnets is not defined
 
     - fail:
-        msg: "'subnets' should be a list"
+        msg: "'subnets' should be list"
       when: subnets is not iterable
 
     - fail:
-        msg: "Max 5 subnets per execution allowed"
-      when: subnets | length > 5
+        msg: "Max 5 subnets allowed per execution"
+      when: (subnets | length) > 5
 
 
-    # ----------------------------------------------------------
-    # 1. Initialize Report List
-    # ----------------------------------------------------------
+    # Init report
     - name: Init subnet_report
       set_fact:
         subnet_report: []
-      delegate_to: localhost
 
 
-    # ----------------------------------------------------------
-    # 2. Load CSV files
-    # ----------------------------------------------------------
-    - name: Read Env.csv
+    # Load CSVs
+    - name: Load Env.csv
       read_csv:
         path: "{{ env_csv }}"
       register: env_raw
@@ -53,51 +46,25 @@
     - set_fact:
         env_data: "{{ env_raw.list }}"
 
-    - name: Read Subnet.csv
+    - name: Load Subnet.csv
       read_csv:
         path: "{{ subnet_csv }}"
       register: subnet_raw
-      ignore_errors: yes   # CSV may be empty first time
 
     - set_fact:
-        subnet_data: "{{ subnet_raw.list | default([]) }}"
+        subnet_data: "{{ subnet_raw.list }}"
 
 
-    # ----------------------------------------------------------
-    # 3. Process each subnet request
-    # ----------------------------------------------------------
+    # Process subnets
     - name: Process each subnet request
       include_tasks: subnet_unit.yml
       loop: "{{ subnets }}"
       loop_control:
         loop_var: req
-        index_var: batch_index
-      vars:
-        naming_region: "{{ req.RegionCode | lower }}"
-        naming_env: "{{ req.Env | lower }}"
-        naming_solution: "{{ req.Solution | lower }}"
-        naming_gcp_region: "{{ region_map[req.RegionCode] }}"
 
 
-    # ----------------------------------------------------------
-    # 4. Determine overall job status
-    # ----------------------------------------------------------
-    - name: Determine overall status
-      set_fact:
-        overall_status: >-
-          {% if (subnet_report | selectattr('status','equalto','FAILED') | list) | length > 0 %}
-            FAILED
-          {% else %}
-            SUCCESS
-          {% endif %}
-      delegate_to: localhost
-      run_once: true
-
-
-    # ----------------------------------------------------------
-    # 5. Generate HTML report
-    # ----------------------------------------------------------
-    - name: Render HTML email report
+    # Render HTML Report
+    - name: Render HTML report
       template:
         src: "templates/subnet_report.html.j2"
         dest: "/tmp/subnet_report.html"
@@ -105,17 +72,27 @@
       run_once: true
 
 
-    # ----------------------------------------------------------
-    # 6. Send Email (Status-aware)
-    # ----------------------------------------------------------
-    - name: Send HTML email
+    # Determine final mail subject
+    - name: Check if any subnet failed
+      set_fact:
+        final_mail_subject: >
+          {{ 'GCP Subnet Creation Report (FAILED)' 
+              if (subnet_report | selectattr('status','equalto','FAILED') | list | length > 0)
+              else 'GCP Subnet Creation Report (SUCCESS)' 
+          }}
+      delegate_to: localhost
+      run_once: true
+
+
+    # Send mail
+    - name: Send HTML mail
       mail:
         host: smtp.gmail.com
         port: 587
         username: "{{ email_user }}"
         password: "{{ email_password }}"
         to: "{{ email_to }}"
-        subject: "GCP Subnet Provisioning Report - {{ overall_status }}"
+        subject: "{{ final_mail_subject }}"
         subtype: html
         body: "{{ lookup('file','/tmp/subnet_report.html') }}"
       delegate_to: localhost
