@@ -69,7 +69,11 @@
       loop_control:
         loop_var: req
         index_var: batch_index
-
+      vars:
+        naming_region: "{{ req.RegionCode | lower }}"
+        naming_env: "{{ req.Env | lower }}"
+        naming_solution: "{{ req.Solution | lower }}"
+        naming_gcp_region: "{{ region_map[req.RegionCode] }}"
 
     # ----------------------------------------------------------
     # 4. Generate HTML report
