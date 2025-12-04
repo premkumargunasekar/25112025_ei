@@ -1,8 +1,9 @@
----
-# subnet_unit.yml – Processes ONE subnet request
-# Expects: req (dict), env_data, subnet_data, calc_script, subnet_csv, gcp_project, region_map, gcp_sa_file
+# subnet_unit.yml
+# ----------------------------------------------------------
+# Processes ONE subnet request safely (CIDR + naming + GCP)
+# ----------------------------------------------------------
 
-# 1. Select block from Env.csv
+# 1. Select parent block
 - name: Select matching block from Env.csv
   set_fact:
     selected_block: "{{ item.Block }}"
@@ -13,11 +14,12 @@
 
 - name: Fail if block missing
   fail:
-    msg: "No block found in Env.csv for Region={{ req.RegionCode }} Env={{ req.Env }}"
+    msg: "No block found for Region={{ req.RegionCode }} Env={{ req.Env }}"
   when: selected_block is not defined
 
-# 2. Run CIDR calculator + Safe Sequence Resolver (Python)
-- name: Calculate CIDR + Safe Sequence
+
+# 2. Run Python CIDR + sequence allocator
+- name: Calculate next CIDR + safe name sequence
   command:
     argv:
       - python3
@@ -30,41 +32,44 @@
       - "{{ req.RegionCode | lower }}"
       - "{{ req.Env | lower }}"
       - "{{ req.Solution | lower }}"
-      - "{{ region_map[req.RegionCode] }}"
+      - "{{ region_map[req.RegionCode] | lower }}"
   register: calc
   changed_when: false
 
-- name: Stop if no CIDR available
+- name: Stop if NO_AVAILABLE_SUBNET
   fail:
-    msg: "No available CIDR in block {{ selected_block }}"
+    msg: "Allocator failed: No subnet available in block {{ selected_block }}"
   when: calc.stdout is defined and calc.stdout.strip() == "NO_AVAILABLE_SUBNET"
 
-# 2.b Parse calc output safely: expected "cidr|seq" or single "cidr"
-- name: Parse calc output (safe)
-  set_fact:
-    _calc_parts: "{{ (calc.stdout | default('')).split('|') }}"
-    new_cidr: >-
-      {{
-        (_calc_parts[0] if (_calc_parts is defined and _calc_parts|length >= 1) else None)
-      }}
-    next_sequence: >-
-      {{
-        (_calc_parts[1] if (_calc_parts is defined and _calc_parts|length >= 2) else
-          ( ( (subnet_data | map(attribute='SubnetName') | list
-                | select('match', (req.RegionCode | lower) ~ '-' ~ (req.Env | lower) ~ '-nw-' ~ req.Solution | lower ~ '-' ~ (region_map[req.RegionCode] | lower) ~ '-(\\d+)-snt$')) | list | length ) + 1 ) | string
-          )
-      }}
-  vars:
-    # when fallback, ensure next_sequence is padded later where required
-    _: "safe parse"
 
-# 3. Build final SubnetName (fully safe)
+# 3. Parse Python output (CIDR|SEQ)
+- name: Parse allocator output
+  set_fact:
+    _calc_parts: "{{ calc.stdout.split('|') }}"
+    new_cidr: "{{ calc.stdout.split('|')[0] }}"
+    raw_seq: "{{ calc.stdout.split('|')[1] }}"
+
+- name: Pad sequence
+  set_fact:
+    seq_padded: "{{ '%03d' % (raw_seq | int) }}"
+
+
+# 4. Build final Subnet Name (FULL FORMAT)
 - name: Build final SubnetName
   set_fact:
-    seq_padded: "{{ (next_sequence|string).zfill( (lookup('env','NAMING_NUM_WIDTH') | default('3')) | int ) }}"
     SubnetName: "{{ req.RegionCode | lower }}-{{ req.Env | lower }}-nw-{{ req.Solution | lower }}-{{ region_map[req.RegionCode] | lower }}-{{ seq_padded }}-snt"
 
-# 4. Create subnet in GCP
+
+# 5. Update Subnet.csv
+- name: Append subnet details to CSV
+  lineinfile:
+    path: "{{ subnet_csv }}"
+    insertafter: EOF
+    line: "{{ req.RegionCode }},{{ req.Env }},{{ new_cidr }},{{ SubnetName }},Created,{{ lookup('pipe','date +%Y-%m-%d_%H:%M:%S') }}"
+  when: new_cidr is defined
+
+
+# 6. Create subnet in GCP
 - name: Create subnet in GCP
   google.cloud.gcp_compute_subnetwork:
     name: "{{ SubnetName }}"
@@ -78,29 +83,21 @@
   register: gcp_result
   ignore_errors: yes
 
-# 5. Update Subnet.csv only on successful create
-- name: Update Subnet.csv (append) - only on success
-  lineinfile:
-    path: "{{ subnet_csv }}"
-    insertafter: EOF
-    line: "{{ req.RegionCode }},{{ req.Env }},{{ new_cidr }},{{ SubnetName }},Created,{{ lookup('pipe','date +%Y-%m-%d_%H:%M:%S') }}"
-  when:
-    - new_cidr is defined
-    - gcp_result is defined
-    - not gcp_result.failed
 
-# 6. Append to Report (always append but mark status correctly)
+# 7. Push result into global report (SUCCESS or FAILED)
 - name: Append result to subnet_report
   set_fact:
-    subnet_report: "{{ subnet_report + [ {
+    subnet_report: "{{ subnet_report +
+      [{
         'region_code': req.RegionCode,
         'region': region_map[req.RegionCode],
         'project': gcp_project,
         'vpc': req.VPC,
         'subnet_name': SubnetName,
         'cidr': new_cidr,
-        'status': ( 'FAILED' if (gcp_result is defined and gcp_result.failed) else 'SUCCESS' ),
-        'message': (gcp_result.msg | default( gcp_result.stderr | default('Created successfully') )) 
-    } ] }}"
+        'status': ('FAILED' if gcp_result.failed else 'SUCCESS'),
+        'message': gcp_result.msg | default('Created successfully')
+      }]
+    }}"
   delegate_to: localhost
   run_once: true
