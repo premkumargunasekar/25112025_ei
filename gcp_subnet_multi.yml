@@ -17,9 +17,7 @@
 
   tasks:
 
-    # -------------------------------------------------
     # Fail early
-    # -------------------------------------------------
     - fail:
         msg: "Variable 'subnets' missing"
       when: subnets is not defined
@@ -33,17 +31,13 @@
       when: (subnets | length) > 5
 
 
-    # -------------------------------------------------
     # Init report
-    # -------------------------------------------------
     - name: Init subnet_report
       set_fact:
         subnet_report: []
 
 
-    # -------------------------------------------------
     # Load CSVs
-    # -------------------------------------------------
     - name: Load Env.csv
       read_csv:
         path: "{{ env_csv }}"
@@ -61,52 +55,7 @@
         subnet_data: "{{ subnet_raw.list }}"
 
 
-    # =================================================
-    # RECONCILIATION STEP (SOURCE OF TRUTH = GCP)
-    # =================================================
-
-    - name: Fetch existing GCP subnets
-      command: >
-        gcloud compute networks subnets list
-        --project {{ gcp_project }}
-        --regions {{ region_map[req.RegionCode] }}
-        --network {{ req.VPC }}
-        --format=json
-      register: gcp_subnets_raw
-      loop: "{{ subnets }}"
-      loop_control:
-        loop_var: req
-
-    - name: Build combined GCP subnet list
-      set_fact:
-        gcp_subnets_all: "{{ gcp_subnets_all | default([]) + (item.stdout | from_json) }}"
-      loop: "{{ gcp_subnets_raw.results }}"
-
-
-    # -------------------------------------------------
-    # FINAL FIXED TASK ✅ (CSV RECONCILIATION)
-    # -------------------------------------------------
-    - name: Reconcile CSV if subnet exists in GCP but missing in CSV
-      lineinfile:
-        path: "{{ subnet_csv }}"
-        insertafter: EOF
-        line: >-
-          {{ gcp_item.region | default('NA') }},
-          {{ gcp_item.env | default('NA') }},
-          {{ gcp_item.ipCidrRange }},
-          {{ gcp_item.name }},
-          Reconciled
-      loop: "{{ gcp_subnets_all }}"
-      loop_control:
-        loop_var: gcp_item
-      when: >
-        gcp_item.ipCidrRange not in
-        (subnet_data | map(attribute='SubnetCIDR') | list)
-
-
-    # -------------------------------------------------
-    # Process subnet requests (NEW ALLOCATIONS ONLY)
-    # -------------------------------------------------
+    # Process subnets
     - name: Process each subnet request
       include_tasks: subnet_unit.yml
       loop: "{{ subnets }}"
@@ -114,9 +63,7 @@
         loop_var: req
 
 
-    # -------------------------------------------------
     # Render HTML Report
-    # -------------------------------------------------
     - name: Render HTML report
       template:
         src: "templates/subnet_report.html.j2"
@@ -125,22 +72,19 @@
       run_once: true
 
 
-    # -------------------------------------------------
-    # Determine mail subject
-    # -------------------------------------------------
+    # Determine final mail subject
     - name: Check if any subnet failed
       set_fact:
         final_mail_subject: >
-          {{ 'GCP Subnet Creation Report (FAILED)'
-             if (subnet_report | selectattr('status','equalto','FAILED') | list | length > 0)
-             else 'GCP Subnet Creation Report (SUCCESS)' }}
+          {{ 'GCP Subnet Creation Report (FAILED)' 
+              if (subnet_report | selectattr('status','equalto','FAILED') | list | length > 0)
+              else 'GCP Subnet Creation Report (SUCCESS)' 
+          }}
       delegate_to: localhost
       run_once: true
 
 
-    # -------------------------------------------------
     # Send mail
-    # -------------------------------------------------
     - name: Send HTML mail
       mail:
         host: smtp.gmail.com
