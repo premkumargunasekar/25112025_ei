@@ -91,7 +91,7 @@
           username: "premgkumardc@gmail.com"
           password: "{{ email_password }}"
           from: "{{ username }}"
-          to: "{{ mail_to }}"
+          to: "{{ email_to }}"
           subject: "GCP Subnet Automation – {{ job_status }}"
           body: |
             Project : {{ gcp_project }}
@@ -104,25 +104,6 @@
             Subnet creation completed successfully.
             {% endif %}
 
-
-        - name: Send SUCCESS / FAILURE mail
-          mail:
-            host: "smtp.gmail.com"
-            port: "587"
-            to: "premkumaransible@gmail.com  "
-            from: "premgkumardc@gmail.com"
-            
-            subject: "GCP Subnet Automation – {{ job_status }}"
-            body: |
-              Project : {{ gcp_project }}
-              Status  : {{ job_status }}
-
-              {% if job_status == 'FAILED' %}
-              Error:
-              {{ job_error }}
-              {% else %}
-              Subnet creation completed successfully.
-              {% endif %}
 
         - name: Write subnet report CSV (only on success)
           when: job_status == 'SUCCESS'
