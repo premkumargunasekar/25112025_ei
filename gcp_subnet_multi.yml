@@ -1,6 +1,6 @@
 ---
 - name: Multi-Subnet IPAM + GCP Provisioning
-  hosts: all
+  hosts: 192.168.20.130
   gather_facts: no
   connection: ssh
 
@@ -83,27 +83,26 @@
               }}
 
       always:
-      - name: Send SUCCESS / FAILURE mail
-        mail:
-          host: "smtp.gmail.com"
-          port: "smtp_port}"
-          secure: starttls
-          username: "premgkumardc@gmail.com"
-          password: "{{ email_password }}"
-          from: "{{ username }}"
-          to: "{{ email_to }}"
-          subject: "GCP Subnet Automation – {{ job_status }}"
-          body: |
-            Project : {{ gcp_project }}
-            Status  : {{ job_status }}
-      
-            {% if job_status == 'FAILED' %}
-            Error:
-            {{ job_error }}
-            {% else %}
-            Subnet creation completed successfully.
-            {% endif %}
 
+        - name: Send SUCCESS / FAILURE mail
+          mail:
+            host: smtp.gmail.com
+            port: 587
+            secure: starttls
+            username: "{{ email_user }}"
+            password: "{{ email_password }}"
+            to: "{{ email_to }}"
+            subject: "GCP Subnet Automation – {{ job_status }}"
+            body: |
+              Project : {{ gcp_project }}
+              Status  : {{ job_status }}
+
+              {% if job_status == 'FAILED' %}
+              Error:
+              {{ job_error }}
+              {% else %}
+              Subnet creation completed successfully.
+              {% endif %}
 
         - name: Write subnet report CSV (only on success)
           when: job_status == 'SUCCESS'
