@@ -83,13 +83,35 @@
               }}
 
       always:
+      - name: Send SUCCESS / FAILURE mail
+        mail:
+          host: "smtp.gmail.com"
+          port: "smtp_port}"
+          secure: starttls
+          username: "premgkumardc@gmail.com"
+          password: "{{ email_password }}"
+          from: "{{ username }}"
+          to: "{{ mail_to }}"
+          subject: "GCP Subnet Automation – {{ job_status }}"
+          body: |
+            Project : {{ gcp_project }}
+            Status  : {{ job_status }}
+      
+            {% if job_status == 'FAILED' %}
+            Error:
+            {{ job_error }}
+            {% else %}
+            Subnet creation completed successfully.
+            {% endif %}
+
 
         - name: Send SUCCESS / FAILURE mail
           mail:
-            host: "{{ smtp_host }}"
-            port: "{{ smtp_port }}"
-            to: "{{ mail_to }}"
-            from: "{{ mail_from }}"
+            host: "smtp.gmail.com"
+            port: "587"
+            to: "premkumaransible@gmail.com  "
+            from: "premgkumardc@gmail.com"
+            
             subject: "GCP Subnet Automation – {{ job_status }}"
             body: |
               Project : {{ gcp_project }}
