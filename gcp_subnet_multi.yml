@@ -1,6 +1,6 @@
 ---
 - name: Multi-Subnet IPAM + GCP Provisioning
-  hosts: 192.168.20.130
+  hosts: all
   gather_facts: no
   connection: ssh
 
@@ -9,6 +9,9 @@
     - vars/paths.yml
 
   vars:
+    job_status: SUCCESS
+    job_error: ""
+
     region_map:
       AO: asia-south1
       EU: europe-west1
@@ -17,83 +20,94 @@
 
   tasks:
 
-    # Fail early
-    - fail:
+    # ----------------------------
+    # Pre-checks
+    # ----------------------------
+    - name: Fail if subnets var missing
+      fail:
         msg: "Variable 'subnets' missing"
       when: subnets is not defined
 
-    - fail:
+    - name: Fail if subnets not list
+      fail:
         msg: "'subnets' should be list"
       when: subnets is not iterable
 
-    - fail:
+    - name: Max 5 subnets allowed
+      fail:
         msg: "Max 5 subnets allowed per execution"
       when: (subnets | length) > 5
 
-
+    # ----------------------------
     # Init report
+    # ----------------------------
     - name: Init subnet_report
       set_fact:
         subnet_report: []
 
-
+    # ----------------------------
     # Load CSVs
+    # ----------------------------
     - name: Load Env.csv
       read_csv:
         path: "{{ env_csv }}"
-      register: env_raw
-
-    - set_fact:
-        env_data: "{{ env_raw.list }}"
+      register: env_data
 
     - name: Load Subnet.csv
       read_csv:
         path: "{{ subnet_csv }}"
-      register: subnet_raw
+      register: subnet_data
 
-    - set_fact:
-        subnet_data: "{{ subnet_raw.list }}"
+    # ----------------------------
+    # Main execution block
+    # ----------------------------
+    - name: Process subnet requests
+      block:
 
+        - name: Process each subnet request
+          include_tasks: subnet_unit.yml
+          loop: "{{ subnets }}"
+          loop_control:
+            loop_var: req
 
-    # Process subnets
-    - name: Process each subnet request
-      include_tasks: subnet_unit.yml
-      loop: "{{ subnets }}"
-      loop_control:
-        loop_var: req
+      rescue:
 
+        - name: Capture failure details
+          set_fact:
+            job_status: FAILED
+            job_error: >-
+              {{
+                ansible_failed_result.msg
+                  | default(ansible_failed_result.stderr, true)
+                  | default('Unknown error occurred')
+              }}
 
-    # Render HTML Report
-    - name: Render HTML report
-      template:
-        src: "templates/subnet_report.html.j2"
-        dest: "/tmp/subnet_report.html"
-      delegate_to: localhost
-      run_once: true
+      always:
 
+        - name: Send SUCCESS / FAILURE mail
+          mail:
+            host: "{{ smtp_host }}"
+            port: "{{ smtp_port }}"
+            to: "{{ mail_to }}"
+            from: "{{ mail_from }}"
+            subject: "GCP Subnet Automation – {{ job_status }}"
+            body: |
+              Project : {{ gcp_project }}
+              Status  : {{ job_status }}
 
-    # Determine final mail subject
-    - name: Check if any subnet failed
-      set_fact:
-        final_mail_subject: >
-          {{ 'GCP Subnet Creation Report (FAILED)' 
-              if (subnet_report | selectattr('status','equalto','FAILED') | list | length > 0)
-              else 'GCP Subnet Creation Report (SUCCESS)' 
-          }}
-      delegate_to: localhost
-      run_once: true
+              {% if job_status == 'FAILED' %}
+              Error:
+              {{ job_error }}
+              {% else %}
+              Subnet creation completed successfully.
+              {% endif %}
 
-
-    # Send mail
-    - name: Send HTML mail
-      mail:
-        host: smtp.gmail.com
-        port: 587
-        username: "{{ email_user }}"
-        password: "{{ email_password }}"
-        to: "{{ email_to }}"
-        subject: "{{ final_mail_subject }}"
-        subtype: html
-        body: "{{ lookup('file','/tmp/subnet_report.html') }}"
-      delegate_to: localhost
-      run_once: true
+        - name: Write subnet report CSV (only on success)
+          when: job_status == 'SUCCESS'
+          copy:
+            dest: "{{ report_csv }}"
+            content: |
+              Project,Region,Env,VPC,Subnet,CIDR,Status
+              {% for r in subnet_report %}
+              {{ r.project }},{{ r.region }},{{ r.env }},{{ r.vpc }},{{ r.subnet }},{{ r.cidr }},{{ r.status }}
+              {% endfor %}
