@@ -9,4 +9,4 @@ subnet_csv: "/opt/GCP/Subnet.csv"
 calc_script: "/opt/GCP/scripts/calc_next_subnet.py"
 
 # GCP Service Account JSON (only file path here, not the content)
-gcp_sa_file: "/etc/ansible/GCP_Auth/gp-lab.json"
+gcp_sa_file: "/opt/GCP/lan-sa.json"
